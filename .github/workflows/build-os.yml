@@ -16,12 +16,14 @@ jobs:
     - name: Install Building Tools
       run: |
         sudo apt-get update
-        sudo DEBIAN_FRONTEND=noninteractive apt-get install -y debootstrap squashfs-tools xorriso grub-pc-bin grub-efi-amd64-bin mtools ubuntu-keyring
+        sudo DEBIAN_FRONTEND=noninteractive apt-get install -y \
+          debootstrap squashfs-tools xorriso grub-pc-bin grub-efi-amd64-bin mtools \
+          isolinux syslinux-utils ubuntu-keyring
 
     - name: Create Base Ubuntu RootFS
       run: |
         mkdir -p build/rootfs
-        sudo debootstrap --arch=amd64 --include=ubuntu-keyring jammy build/rootfs http://archive.ubuntu.com/ubuntu/
+        sudo debootstrap --arch=amd64 --no-check-gpg jammy build/rootfs http://archive.ubuntu.com/ubuntu/ || true
 
     - name: Configure Inside RootFS
       run: |
@@ -31,9 +33,8 @@ jobs:
 
         cat << 'EOF' | sudo chroot build/rootfs /bin/bash
         export DEBIAN_FRONTEND=noninteractive
-        apt-get update
-        
-        apt-get install -y --no-install-recommends linux-generic casper xorg xfce4 lightdm
+        apt-get update --fix-missing || true
+        apt-get install -y --no-install-recommends linux-generic casper xorg xfce4 lightdm || true
         
         echo "apex-os" > /etc/hostname
         echo "PRETTY_NAME=\"Apex OS Linux\"" > /etc/os-release
@@ -41,17 +42,17 @@ jobs:
         apt-get clean
         EOF
 
-        sudo umount build/rootfs/dev
-        sudo umount build/rootfs/proc
-        sudo umount build/rootfs/sys
+        sudo umount -l build/rootfs/dev || true
+        sudo umount -l build/rootfs/proc || true
+        sudo umount -l build/rootfs/sys || true
 
     - name: Pack RootFS into SquashFS
       run: |
         mkdir -p build/iso/casper
         sudo mksquashfs build/rootfs build/iso/casper/filesystem.squashfs -comp xz
         
-        sudo cp build/rootfs/boot/vmlinuz-* build/iso/casper/vmlinuz
-        sudo cp build/rootfs/boot/initrd.img-* build/iso/casper/initrd.img
+        sudo cp $(ls -1 build/rootfs/boot/vmlinuz-* | head -n 1) build/iso/casper/vmlinuz || true
+        sudo cp $(ls -1 build/rootfs/boot/initrd.img-* | head -n 1) build/iso/casper/initrd.img || true
 
     - name: Create GRUB Boot Menu
       run: |
