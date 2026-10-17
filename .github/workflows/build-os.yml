@@ -16,12 +16,12 @@ jobs:
     - name: Install Building Tools
       run: |
         sudo apt-get update
-        sudo apt-get install -y debootstrap squashfs-tools xorriso grub-pc-bin grub-efi-amd64-bin mtools
+        sudo apt-get install -y debootstrap squashfs-tools xorriso grub-pc-bin grub-efi-amd64-bin mtools isolinux
 
     - name: Create Base Ubuntu RootFS
       run: |
         mkdir -p build/rootfs
-        sudo debootstrap --arch=amd64 noble build/rootfs http://archive.ubuntu.com/ubuntu/
+        sudo debootstrap --arch=amd64 --variant=minbase jammy build/rootfs http://archive.ubuntu.com/ubuntu/
 
     - name: Configure and Install Packages Inside RootFS
       run: |
@@ -33,7 +33,7 @@ jobs:
         export DEBIAN_FRONTEND=noninteractive
         apt-get update
         
-        apt-get install -y linux-generic casper xorg xfce4 lightdm
+        apt-get install -y --no-install-recommends linux-generic casper xorg xfce4 lightdm
         
         echo "apex-os" > /etc/hostname
         echo "PRETTY_NAME=\"Apex OS Linux\"" > /etc/os-release
