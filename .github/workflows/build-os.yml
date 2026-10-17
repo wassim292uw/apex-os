@@ -1,0 +1,77 @@
+name: Build Custom Ubuntu ISO
+
+on:
+  push:
+    branches: [ "main" ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout Repository
+      uses: actions/checkout@v4
+
+    - name: Install Building Tools
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y debootstrap squashfs-tools xorriso grub-pc-bin grub-efi-amd64-bin mtools
+
+    - name: Create Base Ubuntu RootFS
+      run: |
+        mkdir -p build/rootfs
+        sudo debootstrap --arch=amd64 noble build/rootfs http://archive.ubuntu.com/ubuntu/
+
+    - name: Configure and Install Packages Inside RootFS
+      run: |
+        sudo mount --bind /dev build/rootfs/dev
+        sudo mount --bind /proc build/rootfs/proc
+        sudo mount --bind /sys build/rootfs/sys
+
+        cat << 'EOF' | sudo chroot build/rootfs /bin/bash
+        export DEBIAN_FRONTEND=noninteractive
+        apt-get update
+        
+        apt-get install -y linux-generic casper xorg xfce4 lightdm
+        
+        echo "apex-os" > /etc/hostname
+        echo "PRETTY_NAME=\"Apex OS Linux\"" > /etc/os-release
+        
+        apt-get clean
+        EOF
+
+        sudo umount build/rootfs/dev
+        sudo umount build/rootfs/proc
+        sudo umount build/rootfs/sys
+
+    - name: Pack RootFS into SquashFS
+      run: |
+        mkdir -p build/iso/casper
+        sudo mksquashfs build/rootfs build/iso/casper/filesystem.squashfs -comp xz
+        
+        sudo cp build/rootfs/boot/vmlinuz-* build/iso/casper/vmlinuz
+        sudo cp build/rootfs/boot/initrd.img-* build/iso/casper/initrd.img
+
+    - name: Create GRUB Boot Menu
+      run: |
+        mkdir -p build/iso/boot/grub
+        cat << 'EOF' > build/iso/boot/grub/grub.cfg
+        set default=0
+        set timeout=10
+
+        menuentry "Apex OS (Live ISO)" {
+            linux /casper/vmlinuz boot=casper quiet splash ---
+            initrd /casper/initrd.img
+        }
+        EOF
+
+    - name: Generate Final Live ISO Image
+      run: |
+        grub-mkrescue -o ApexOS-Live.iso build/iso
+
+    - name: Upload ISO Artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: ApexOS-Live-ISO
+        path: ApexOS-Live.iso
